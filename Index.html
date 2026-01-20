@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>SHELTER</title>
+  <style>
+    @keyframes glow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .glow { animation: glow 2s ease-in-out infinite; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fadeIn { animation: fadeIn 0.3s ease-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect } = React;
+
+// РАСТЕНИЯ - МНОГО, С ЮМОРОМ
+const PLANTS = {
+  // 🌱 БАЗОВЫЕ
+  mushroom: { id: 'mushroom', name: 'Мутогриб', icon: '🍄', time: 2*60*60, food: 5, category: 'base', desc: 'Есть их не рекомендуется. Но выбора нет.', cost: 10 },
+  corn: { id: 'corn', name: 'Кукуруза "Слепая"', icon: '🌽', time: 4*60*60, food: 8, rad: 2, category: 'base', desc: 'Названа так потому что у неё нет глаз. Шутка. Или нет.', cost: 20 },
+  beet: { id: 'beet', name: 'Свёкла "Последняя"', icon: '🥔', time: 6*60*60, food: 15, sickChance: 0.1, category: 'base', desc: 'Много еды. Иногда вызывает рвоту. Чаще чем иногда.', cost: 35 },
+  lichen: { id: 'lichen', name: 'Лишайник №7', icon: '🌿', time: 1*60*60, food: 2, rad: -1, category: 'base', desc: 'Снижает радиацию. Вкус как у старого носка.', cost: 15 },
+  
+  // ☢ РАДИОАКТИВНЫЕ
+  glowshroom: { id: 'glowshroom', name: 'Светогриб', icon: '🔆', time: 3*60*60, food: 10, rad: 5, energy: 2, category: 'rad', desc: 'Светится в темноте. Энергетик от природы.', cost: 50 },
+  radcorn: { id: 'radcorn', name: 'Радкукуруза', icon: '☢️', time: 5*60*60, food: 12, rad: 8, category: 'rad', desc: 'Выросла возле реактора. Теперь она часть семьи.', cost: 80 },
+  mutato: { id: 'mutato', name: 'Мутато', icon: '🥕', time: 4*60*60, food: 14, mutateChance: 0.15, category: 'rad', desc: 'Картошка? Морковь? Кто знает. Она сама не знает.', cost: 60 },
+  
+  // 🧪 ЭКСПЕРИМЕНТАЛЬНЫЕ
+  brain_plant: { id: 'brain_plant', name: 'Думогриб', icon: '🧠', time: 8*60*60, food: 20, special: 'talks', category: 'exp', desc: 'Иногда шепчет. Обычно жалуется на жизнь.', cost: 150 },
+  crystal: { id: 'crystal', name: 'Кристалл "Надежда"', icon: '💎', time: 10*60*60, food: 0, junk: 30, category: 'exp', desc: 'Не съедобен. Но красивый. Бесполезен, как надежда.', cost: 200 },
+  void_berry: { id: 'void_berry', name: 'Пустоягода', icon: '⚫', time: 6*60*60, food: 25, voidChance: 0.05, category: 'exp', desc: 'Иногда исчезает прямо в руках. Вместе с руками.', cost: 120 },
+  
+  // ☠ ЗАПРЕЩЁННЫЕ
+  dont_touch: { id: 'dont_touch', name: 'Плод "НЕ ТРОГАТЬ"', icon: '🔴', time: 12*60*60, food: 50, explodeChance: 0.2, category: 'forbidden', desc: 'На упаковке написано НЕ ТРОГАТЬ. Мы игнорируем инструкции.', cost: 300 },
+  screamer: { id: 'screamer', name: 'Крикун', icon: '😱', time: 7*60*60, food: 18, screamChance: 0.3, category: 'forbidden', desc: 'Кричит когда его срываешь. Потом кричишь ты.', cost: 180 },
+  last_hope: { id: 'last_hope', name: 'Последняя Надежда', icon: '✨', time: 24*60*60, food: 100, rad: -10, category: 'forbidden', desc: 'Растёт сутки. Того стоит. Наверное.', cost: 500 }
+};
+
+// СОБЫТИЯ ВЫЛАЗОК
+const EXPEDITION_EVENTS = [
+  { text: 'Нашли склад старых консервов. Срок годности истёк в 2015. Берём.', junk: 30, food: 5 },
+  { text: 'Детская площадка. Детей нет. Хлам есть.', junk: 25 },
+  { text: 'Попали под радиоактивный дождь. Теперь светимся.', rad: 5, junk: 10 },
+  { text: 'Встретили другого выжившего. Он попросил еды. Мы отказали.', junk: 15 },
+  { text: 'Нашли медицинский набор. Внутри аспирин и записка "удачи".', junk: 40 },
+  { text: 'Обнаружили заброшенный бункер. Внутри скелет с табличкой "Я ЗНАЛ".', junk: 50, rad: 3 },
+  { text: 'Мутировавшая крыса размером с собаку. Убежали. Она тоже убежала.', junk: 5 },
+  { text: 'Нашли генератор. Не работает. Но мы всё равно его тащим.', junk: 60 },
+  { text: 'Библиотека. Все книги сгорели. Кроме "Как пережить апокалипсис". Ирония.', junk: 20 },
+  { text: 'Бывший офис. На столе лежит бейдж "Лучший сотрудник месяца". Месяц - май 2077.', junk: 35 },
+  { text: 'Аптека разграблена. Осталось только средство от перхоти. Берём.', junk: 15 },
+  { text: 'Вывеска "Добро пожаловать в город Надежда". Города нет.', junk: 45 },
+  { text: 'Нашли запись на старой флешке. Там кто-то поёт караоке. Плохо поёт.', junk: 30 },
+  { text: 'Встретили робота-уборщика. Он до сих пор метёт пепел.', junk: 40 },
+  { text: 'Потеряли всё. Абсолютно всё. День как день.', junk: 0, food: -5 }
+];
+
+// УЛУЧШЕНИЯ
+const UPGRADES = {
+  farm_slots: { id: 'farm_slots', name: '+1 слот фермы', desc: 'Больше растений = больше отчаяния', cost: 100, maxLevel: 10 },
+  water_cap: { id: 'water_cap', name: '+10 воды (макс)', desc: 'Теперь можем хранить больше грязной воды', cost: 150, maxLevel: 5 },
+  energy_cap: { id: 'energy_cap', name: '+10 энергии (макс)', desc: 'Чтобы делать больше ненужных действий', cost: 200, maxLevel: 5 },
+  rad_filter: { id: 'rad_filter', name: 'Улучшить фильтры', desc: 'Радиация накапливается медленнее на 10%', cost: 250, maxLevel: 3 },
+  storage: { id: 'storage', name: '+50 склад хлама', desc: 'Больше места для мусора', cost: 120, maxLevel: 8 },
+  faster_grow: { id: 'faster_grow', name: 'Ускорение роста -5%', desc: 'Растения растут чуть быстрее. Чуть.', cost: 300, maxLevel: 4 }
+};
+
+// SVG иконки
+const X = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+
+function Shelter() {
+  // ОСНОВНЫЕ РЕСУРСЫ
+  const [radiation, setRadiation] = useState(10);
+  const [energy, setEnergy] = useState(20);
+  const [maxEnergy, setMaxEnergy] = useState(20);
+  const [water, setWater] = useState(10);
+  const [maxWater, setMaxWater] = useState(20);
+  const [junk, setJunk] = useState(50);
+  const [maxJunk, setMaxJunk] = useState(200);
+  const [food, setFood] = useState(20);
+  
+  // ИГРОВОЕ СОСТОЯНИЕ
+  const [farmSlots, setFarmSlots] = useState([
+    { id: 1, plant: null, startTime: null, status: 'empty' },
+    { id: 2, plant: null, startTime: null, status: 'empty' }
+  ]);
+  const [expeditions, setExpeditions] = useState([]);
+  const [upgrades, setUpgrades] = useState({});
+  const [message, setMessage] = useState(null);
+  const [currentScreen, setCurrentScreen] = useState('shelter'); // shelter, plant, expedition, upgrades
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [logs, setLogs] = useState([
+    { time: Date.now(), text: 'Добро пожаловать в убежище. Извините.' }
+  ]);
+
+  // Автосохранение
+  useEffect(() => {
+    const interval = setInterval(() => saveGame(), 30000);
+    return () => clearInterval(interval);
+  }, [radiation, energy, water, junk, food, farmSlots, expeditions, upgrades]);
+
+  // Загрузка при старте
+  useEffect(() => {
+    loadGame();
+    const energyInterval = setInterval(() => {
+      setEnergy(prev => Math.min(prev + 1, maxEnergy));
+    }, 60000); // +1 энергия каждую минуту
+    return () => clearInterval(energyInterval);
+  }, []);
+
+  // Проверка таймеров
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkTimers();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [farmSlots, expeditions]);
+
+  const saveGame = () => {
+    try {
+      const data = { radiation, energy, maxEnergy, water, maxWater, junk, maxJunk, food, farmSlots, expeditions, upgrades, logs };
+      localStorage.setItem('shelter_save', JSON.stringify(data));
+    } catch (e) {
+      console.error('Save error:', e);
+    }
+  };
+
+  const loadGame = () => {
+    try {
+      const saved = localStorage.getItem('shelter_save');
+      if (saved) {
+        const data = JSON.parse(saved);
+        setRadiation(data.radiation || 10);
+        setEnergy(data.energy || 20);
+        setMaxEnergy(data.maxEnergy || 20);
+        setWater(data.water || 10);
+        setMaxWater(data.maxWater || 20);
+        setJunk(data.junk || 50);
+        setMaxJunk(data.maxJunk || 200);
+        setFood(data.food || 20);
+        setFarmSlots(data.farmSlots || farmSlots);
+        setExpeditions(data.expeditions || []);
+        setUpgrades(data.upgrades || {});
+        setLogs(data.logs || logs);
+        addLog('Сохранение загружено. Ничего не изменилось.');
+      }
+    } catch (e) {
+      console.error('Load error:', e);
+    }
+  };
+
+  const addLog = (text) => {
+    setLogs(prev => [{ time: Date.now(), text }, ...prev].slice(0, 50));
+  };
+
+  const showMsg = (text, duration = 2000) => {
+    setMessage(text);
+    setTimeout(() => setMessage(null), duration);
+  };
+
+  const checkTimers = () => {
+    const now = Date.now();
+    
+    // Проверка растений
+    setFarmSlots(prev => prev.map(slot => {
+      if (slot.status === 'growing' && slot.startTime) {
+        const plant = PLANTS[slot.plant];
+        const timeModifier = 1 + (radiation / 100); // Радиация замедляет
+        const totalTime = plant.time * 1000 * timeModifier;
+        
+        if (now - slot.startTime >= totalTime) {
+          addLog(`${plant.name} вырос. ${plant.desc}`);
+          return { ...slot, status: 'ready' };
+        }
+      }
+      return slot;
+    }));
+
+    // Проверка экспедиций
+    setExpeditions(prev => prev.map(exp => {
+      if (exp.status === 'active' && now - exp.startTime >= exp.duration * 1000) {
+        const event = EXPEDITION_EVENTS[Math.floor(Math.random() * EXPEDITION_EVENTS.length)];
+        addLog(`Вылазка завершена: ${event.text}`);
+        
+        setJunk(j => Math.min(j + (event.junk || 0), maxJunk));
+        setFood(f => Math.max(0, f + (event.food || 0)));
+        setRadiation(r => Math.max(0, Math.min(100, r + (event.rad || 0))));
+        
+        return { ...exp, status: 'completed', event };
+      }
+      return exp;
+    }));
+  };
+
+  const plantSeed = (plantId) => {
+    if (!selectedSlot) return;
+    const plant = PLANTS[plantId];
+    
+    if (junk < plant.cost) {
+      showMsg('Недостаточно хлама!');
+      return;
+    }
+    if (water < 1) {
+      showMsg('Нужна вода для посадки!');
+      return;
+    }
+
+    setJunk(j => j - plant.cost);
+    setWater(w => w - 1);
+    setFarmSlots(prev => prev.map(slot => 
+      slot.id === selectedSlot 
+        ? { ...slot, plant: plantId, startTime: Date.now(), status: 'growing' }
+        : slot
+    ));
+    
+    addLog(`Посадили ${plant.name}. ${plant.desc}`);
+    setCurrentScreen('shelter');
+    setSelectedSlot(null);
+  };
+
+  const harvest = (slotId) => {
+    const slot = farmSlots.find(s => s.id === slotId);
+    if (!slot || slot.status !== 'ready') return;
+    
+    const plant = PLANTS[slot.plant];
+    let harvestedFood = plant.food || 0;
+    let harvestedJunk = plant.junk || 0;
+    let eventText = '';
+
+    // РАНДОМНЫЕ СОБЫТИЯ при сборе
+    const rand = Math.random();
+    
+    if (plant.explodeChance && rand < plant.explodeChance) {
+      eventText = `${plant.name} взорвался! Потеряли всё.`;
+      harvestedFood = 0;
+      harvestedJunk = 0;
+      setRadiation(r => Math.min(100, r + 10));
+    } else if (plant.mutateChance && rand < plant.mutateChance) {
+      eventText = `${plant.name} мутировал! Двойной урожай!`;
+      harvestedFood *= 2;
+    } else if (plant.voidChance && rand < plant.voidChance) {
+      eventText = `${plant.name} исчез в пустоту. Вместе с вашей рукой. Шутка. Или нет.`;
+      harvestedFood = 0;
+    } else if (plant.screamChance && rand < plant.screamChance) {
+      eventText = `${plant.name} закричал при сборе. Вы тоже закричали.`;
+    } else if (plant.special === 'talks') {
+      const phrases = [
+        'Думогриб прошептал: "Зачем ты меня срываешь?"',
+        'Думогриб сказал: "Жизнь - боль."',
+        'Думогриб молчит. Это хуже.'
+      ];
+      eventText = phrases[Math.floor(Math.random() * phrases.length)];
+    }
+
+    setFood(f => f + harvestedFood);
+    setJunk(j => Math.min(j + harvestedJunk, maxJunk));
+    if (plant.rad) setRadiation(r => Math.max(0, Math.min(100, r + plant.rad)));
+    if (plant.energy) setEnergy(e => Math.min(e + plant.energy, maxEnergy));
+    
+    setFarmSlots(prev => prev.map(s => 
+      s.id === slotId 
+        ? { ...s, plant: null, startTime: null, status: 'empty' }
+        : s
+    ));
+
+    const finalText = eventText || `Собрали ${plant.name}. +${harvestedFood} еды.`;
+    addLog(finalText);
+    showMsg(finalText);
+  };
+
+  const startExpedition = (duration, cost) => {
+    if (energy < cost) {
+      showMsg('Недостаточно энергии!');
+      return;
+    }
+
+    setEnergy(e => e - cost);
+    const newExp = {
+      id: Date.now(),
+      duration: duration * 60, // минуты в секунды
+      startTime: Date.now(),
+      status: 'active'
+    };
+    
+    setExpeditions(prev => [...prev, newExp]);
+    addLog(`Отправились на вылазку (${duration} мин). Удачи нам.`);
+    setCurrentScreen('shelter');
+  };
+
+  const buyUpgrade = (upgradeId) => {
+    const upgrade = UPGRADES[upgradeId];
+    const currentLevel = upgrades[upgradeId] || 0;
+    
+    if (currentLevel >= upgrade.maxLevel) {
+      showMsg('Максимальный уровень!');
+      return;
+    }
+
+    const cost = upgrade.cost * (currentLevel + 1);
+    if (junk < cost) {
+      showMsg('Недостаточно хлама!');
+      return;
+    }
+
+    setJunk(j => j - cost);
+    setUpgrades(prev => ({ ...prev, [upgradeId]: currentLevel + 1 }));
+
+    // Применение эффектов
+    if (upgradeId === 'farm_slots') {
+      setFarmSlots(prev => [...prev, { id: prev.length + 1, plant: null, startTime: null, status: 'empty' }]);
+    } else if (upgradeId === 'water_cap') {
+      setMaxWater(w => w + 10);
+    } else if (upgradeId === 'energy_cap') {
+      setMaxEnergy(e => e + 10);
+    } else if (upgradeId === 'storage') {
+      setMaxJunk(j => j + 50);
+    }
+
+    addLog(`Улучшение: ${upgrade.name}. ${upgrade.desc}`);
+  };
+
+  const getTimeLeft = (startTime, duration) => {
+    const elapsed = Date.now() - startTime;
+    const remaining = Math.max(0, duration - elapsed);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-gray-900 via-gray-800 to-black text-white">
+      {/* Фон с эффектом радиации */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute top-0 left-0 w-full h-full" style={{
+          background: `radial-gradient(circle at ${radiation}% 50%, rgba(0,255,0,0.3) 0%, transparent 50%)`
+        }} />
+      </div>
+
+      <div className="relative z-10 p-4 max-w-2xl mx-auto">
+        {/* HEADER */}
+        <div className="mb-6 p-6 rounded-2xl border-2 border-orange-500 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-sm">
+          <h1 className="text-3xl font-bold text-center mb-4 text-orange-400" style={{ fontFamily: 'monospace' }}>
+            ☢ SHELTER ☢
+          </h1>
+
+          {/* Статусы */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-black/40 border border-green-500/30">
+              <div className="text-xs text-gray-400">☢ Радиация</div>
+              <div className="text-lg font-bold text-green-400">{radiation}%</div>
+            </div>
+            <div className="p-2 rounded-lg bg-black/40 border border-yellow-500/30">
+              <div className="text-xs text-gray-400">⚡ Энергия</div>
+              <div className="text-lg font-bold text-yellow-400">{energy}/{maxEnergy}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-black/40 border border-blue-500/30">
+              <div className="text-xs text-gray-400">💧 Вода</div>
+              <div className="text-lg font-bold text-blue-400">{water}/{maxWater}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2 rounded-lg bg-black/40 border border-gray-500/30">
+              <div className="text-xs text-gray-400">🧰 Хлам</div>
+              <div className="text-lg font-bold text-gray-300">{junk}/{maxJunk}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-black/40 border border-red-500/30">
+              <div className="text-xs text-gray-400">🍖 Еда</div>
+              <div className="text-lg font-bold text-red-400">{food}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Message */}
+        {message && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 fadeIn">
+            <div className="px-6 py-3 rounded-lg bg-orange-500 text-black font-bold shadow-lg">
+              {message}
+            </div>
+          </div>
+        )}
+
+        {/* ЭКРАН: УБЕЖИЩЕ */}
+        {currentScreen === 'shelter' && (
+          <div className="space-y-4">
+            {/* Навигация */}
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => setCurrentScreen('shelter')} className="py-3 rounded-lg bg-orange-600 font-bold">
+                🏠 Убежище
+              </button>
+              <button onClick={() => setCurrentScreen('expedition')} className="py-3 rounded-lg bg-gray-700 font-bold hover:bg-gray-600">
+                🎒 Вылазки
+              </button>
+              <button onClick={() => setCurrentScreen('upgrades')} className="py-3 rounded-lg bg-gray-700 font-bold hover:bg-gray-600">
+                ⚙️ Улучшения
+              </button>
+            </div>
+
+            {/* ФЕРМА */}
+            <div className="p-4 rounded-xl bg-gray-800/50 border border-green-500/30">
+              <h2 className="text-xl font-bold mb-3 text-green-400">🌱 ФЕРМА</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {farmSlots.map(slot => {
+                  const plant = slot.plant ? PLANTS[slot.plant] : null;
+                  return (
+                    <div key={slot.id} onClick={() => {
+                      if (slot.status === 'empty') {
+                        setSelectedSlot(slot.id);
+                        setCurrentScreen('plant');
+                      } else if (slot.status === 'ready') {
+                        harvest(slot.id);
+                      }
+                    }} className="p-4 rounded-lg border-2 cursor-pointer hover:scale-105 transition-transform" style={{
+                      background: slot.status === 'ready' ? 'rgba(0,255,0,0.1)' : slot.status === 'growing' ? 'rgba(255,165,0,0.1)' : 'rgba(255,255,255,0.05)',
+                      borderColor: slot.status === 'ready' ? '#00ff00' : slot.status === 'growing' ? '#ffa500' : '#444'
+                    }}>
+                      {slot.status === 'empty' && (
+                        <div className="text-center text-gray-500">
+                          <div className="text-3xl mb-2">➕</div>
+                          <div className="text-xs">Посадить</div>
+                        </div>
+                      )}
+                      {slot.status === 'growing' && plant && (
+                        <div className="text-center">
+                          <div className="text-3xl mb-1">{plant.icon}</div>
+                          <div className="text-xs font-bold text-orange-400">{plant.name}</div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {getTimeLeft(slot.startTime, plant.time * 1000 * (1 + radiation / 100))}
+                          </div>
+                        </div>
+                      )}
+                      {slot.status === 'ready' && plant && (
+                        <div className="text-center">
+                          <div className="text-3xl mb-1 glow">{plant.icon}</div>
+                          <div className="text-xs font-bold text-green-400">{plant.name}</div>
+                          <div className="text-xs text-green-300 mt-1">✓ Готово!</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* АКТИВНЫЕ ЭКСПЕДИЦИИ */}
+            {expeditions.filter(e => e.status === 'active').length > 0 && (
+              <div className="p-4 rounded-xl bg-gray-800/50 border border-yellow-500/30">
+                <h2 className="text-xl font-bold mb-3 text-yellow-400">🎒 ВЫЛАЗКИ</h2>
+                {expeditions.filter(e => e.status === 'active').map(exp => (
+                  <div key={exp.id} className="p-3 rounded-lg bg-black/40 border border-yellow-500/50 mb-2">
+                    <div className="text-sm text-gray-300">В процессе...</div>
+                    <div className="text-lg font-bold text-yellow-400">
+                      {getTimeLeft(exp.startTime, exp.duration * 1000)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ЛОГ */}
+            <div className="p-4 rounded-xl bg-gray-800/50 border border-gray-500/30">
+              <h2 className="text-xl font-bold mb-3 text-gray-400">📋 ЖУРНАЛ</h2>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {logs.slice(0, 10).map((log, i) => (
+                  <div key={i} className="text-xs text-gray-400 border-l-2 border-gray-600 pl-2">
+                    {log.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ЭКРАН: ПОСАДКА */}
+        {currentScreen === 'plant' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-green-400">🌱 ВЫБОР РАСТЕНИЯ</h2>
+              <button onClick={() => setCurrentScreen('shelter')} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600">
+                <X />
+              </button>
+            </div>
+
+            {/* Категории */}
+            {['base', 'rad', 'exp', 'forbidden'].map(cat => {
+              const categoryNames = { base: '🌱 БАЗОВЫЕ', rad: '☢ РАДИОАКТИВНЫЕ', exp: '🧪 ЭКСПЕРИМЕНТАЛЬНЫЕ', forbidden: '☠ ЗАПРЕЩЁННЫЕ' };
+              const categoryPlants = Object.values(PLANTS).filter(p => p.category === cat);
+              
+              return (
+                <div key={cat} className="p-4 rounded-xl bg-gray-800/50 border border-green-500/30">
+                  <h3 className="text-lg font-bold mb-3 text-green-300">{categoryNames[cat]}</h3>
+                  <div className="space-y-2">
+                    {categoryPlants.map(plant => (
+                      <div key={plant.id} onClick={() => plantSeed(plant.id)} className="p-3 rounded-lg bg-black/40 border border-gray-600 hover:border-green-500 cursor-pointer transition-all">
+                        <div className="flex items-start gap-3">
+                          <div className="text-3xl">{plant.icon}</div>
+                          <div className="flex-1">
+                            <div className="font-bold text-white">{plant.name}</div>
+                            <div className="text-xs text-gray-400 mt-1">{plant.desc}</div>
+                            <div className="flex gap-3 mt-2 text-xs">
+                              <span className="text-yellow-400">💰 {plant.cost} хлама</span>
+                              <span className="text-blue-400">⏱ {Math.floor(plant.time / 3600)}ч</span>
+                              <span className="text-red-400">🍖 +{plant.food || 0}</span>
+                              {plant.rad && <span className={plant.rad > 0 ? 'text-green-400' : 'text-purple-400'}>☢ {plant.rad > 0 ? '+' : ''}{plant.rad}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ЭКРАН: ВЫЛАЗКИ */}
+        {currentScreen === 'expedition' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-yellow-400">🎒 ВЫЛАЗКИ</h2>
+              <button onClick={() => setCurrentScreen('shelter')} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600">
+                <X />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-yellow-900/20 border border-yellow-500/50">
+              <p className="text-sm text-yellow-200">
+                Отправляйтесь на поиски ресурсов в пустошь. Чем дольше вылазка - тем больше хлама, но и риск выше.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                { name: 'Короткая вылазка', duration: 30, cost: 5, desc: 'Быстрый обход ближайших развалин' },
+                { name: 'Средняя вылазка', duration: 120, cost: 10, desc: 'Поход в город. Бывший город.' },
+                { name: 'Долгая вылазка', duration: 360, cost: 15, desc: 'Исследование дальних территорий' },
+                { name: 'Отчаянная вылазка', duration: 720, cost: 20, desc: 'Туда, куда не стоит ходить' }
+              ].map((exp, i) => (
+                <div key={i} onClick={() => startExpedition(exp.duration, exp.cost)} className="p-4 rounded-lg bg-gray-800 border-2 border-yellow-500/30 hover:border-yellow-500 cursor-pointer transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="font-bold text-yellow-400">{exp.name}</div>
+                      <div className="text-xs text-gray-400 mt-1">{exp.desc}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-400">⏱ {exp.duration} мин</div>
+                      <div className="text-sm font-bold text-yellow-400">⚡ {exp.cost}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Завершённые вылазки */}
+            {expeditions.filter(e => e.status === 'completed').length > 0 && (
+              <div className="p-4 rounded-xl bg-gray-800/50 border border-green-500/30">
+                <h3 className="text-lg font-bold mb-3 text-green-400">✓ ЗАВЕРШЁННЫЕ</h3>
+                {expeditions.filter(e => e.status === 'completed').map(exp => (
+                  <div key={exp.id} className="p-3 rounded-lg bg-black/40 border border-green-500/50 mb-2">
+                    <div className="text-sm text-gray-300">{exp.event?.text}</div>
+                    <div className="flex gap-3 mt-2 text-xs">
+                      {exp.event?.junk > 0 && <span className="text-yellow-400">🧰 +{exp.event.junk}</span>}
+                      {exp.event?.food && <span className="text-red-400">🍖 {exp.event.food > 0 ? '+' : ''}{exp.event.food}</span>}
+                      {exp.event?.rad && <span className="text-green-400">☢ +{exp.event.rad}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ЭКРАН: УЛУЧШЕНИЯ */}
+        {currentScreen === 'upgrades' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-purple-400">⚙️ УЛУЧШЕНИЯ</h2>
+              <button onClick={() => setCurrentScreen('shelter')} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600">
+                <X />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {Object.values(UPGRADES).map(upgrade => {
+                const currentLevel = upgrades[upgrade.id] || 0;
+                const cost = upgrade.cost * (currentLevel + 1);
+                const isMaxed = currentLevel >= upgrade.maxLevel;
+
+                return (
+                  <div key={upgrade.id} onClick={() => !isMaxed && buyUpgrade(upgrade.id)} className={`p-4 rounded-lg border-2 ${
+                    isMaxed ? 'bg-gray-900/50 border-gray-700 opacity-50' : 'bg-gray-800 border-purple-500/30 hover:border-purple-500 cursor-pointer'
+                  } transition-all`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <div className="font-bold text-white">{upgrade.name}</div>
+                        <div className="text-xs text-gray-400 mt-1">{upgrade.desc}</div>
+                        <div className="flex gap-3 mt-2 text-xs">
+                          <span className="text-purple-400">Уровень: {currentLevel}/{upgrade.maxLevel}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {!isMaxed ? (
+                          <div className="text-sm font-bold text-yellow-400">🧰 {cost}</div>
+                        ) : (
+                          <div className="text-sm font-bold text-green-400">✓ МАКС</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Секция фильтров */}
+            <div className="p-4 rounded-xl bg-blue-900/20 border border-blue-500/50">
+              <h3 className="text-lg font-bold mb-2 text-blue-400">💧 СИСТЕМА ФИЛЬТРАЦИИ</h3>
+              <p className="text-xs text-gray-300 mb-3">
+                Текущий уровень радиации: {radiation}%
+                {radiation > 50 && ' ⚠️ ВЫСОКИЙ УРОВЕНЬ'}
+              </p>
+              <button onClick={() => {
+                if (food >= 5) {
+                  setFood(f => f - 5);
+                  setRadiation(r => Math.max(0, r - 5));
+                  addLog('Использовали еду для работы фильтров. Радиация снижена.');
+                  showMsg('Радиация -5%');
+                } else {
+                  showMsg('Нужно 5 еды!');
+                }
+              }} className="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 font-bold">
+                Очистить воздух (-5% рад, -5 еды)
+              </button>
+            </div>
+
+            {/* Генератор */}
+            <div className="p-4 rounded-xl bg-yellow-900/20 border border-yellow-500/50">
+              <h3 className="text-lg font-bold mb-2 text-yellow-400">⚡ ГЕНЕРАТОР</h3>
+              <p className="text-xs text-gray-300 mb-3">
+                Энергия: {energy}/{maxEnergy}
+              </p>
+              <button onClick={() => {
+                if (junk >= 20) {
+                  setJunk(j => j - 20);
+                  setEnergy(e => Math.min(e + 10, maxEnergy));
+                  addLog('Подбросили хлам в генератор. Энергия восстановлена.');
+                  showMsg('Энергия +10');
+                } else {
+                  showMsg('Нужно 20 хлама!');
+                }
+              }} className="w-full py-3 rounded-lg bg-yellow-600 hover:bg-yellow-500 font-bold">
+                Сжечь хлам (+10 энергии, -20 хлама)
+              </button>
+            </div>
+
+            {/* Добыча воды */}
+            <div className="p-4 rounded-xl bg-cyan-900/20 border border-cyan-500/50">
+              <h3 className="text-lg font-bold mb-2 text-cyan-400">💧 СБОРЩИК ВОДЫ</h3>
+              <p className="text-xs text-gray-300 mb-3">
+                Вода: {water}/{maxWater}
+              </p>
+              <button onClick={() => {
+                if (energy >= 5) {
+                  setEnergy(e => e - 5);
+                  setWater(w => Math.min(w + 3, maxWater));
+                  addLog('Собрали немного воды из конденсата.');
+                  showMsg('Вода +3');
+                } else {
+                  showMsg('Нужно 5 энергии!');
+                }
+              }} className="w-full py-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 font-bold">
+                Собрать воду (+3 воды, -5 энергии)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Footer с саркастичными советами */}
+        <div className="mt-6 p-3 rounded-lg bg-gray-900/50 border border-gray-700 text-center text-xs text-gray-500">
+          {radiation < 30 && "Радиация в норме. Пока."}
+          {radiation >= 30 && radiation < 60 && "Радиация повышена. Светиться в темноте - модно."}
+          {radiation >= 60 && radiation < 80 && "Радиация высокая. Третья рука скоро вырастет."}
+          {radiation >= 80 && "☢ КРИТИЧЕСКИЙ УРОВЕНЬ РАДИАЦИИ ☢"}
+        </div>
+
+        {/* Дополнительная статистика */}
+        <div className="mt-4 p-4 rounded-xl bg-gray-800/50 border border-gray-600">
+          <h3 className="text-sm font-bold mb-2 text-gray-400">📊 СТАТИСТИКА</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="text-gray-400">Слотов фермы: <span className="text-white">{farmSlots.length}</span></div>
+            <div className="text-gray-400">Активных растений: <span className="text-white">{farmSlots.filter(s => s.status === 'growing').length}</span></div>
+            <div className="text-gray-400">Готовых к сбору: <span className="text-white">{farmSlots.filter(s => s.status === 'ready').length}</span></div>
+            <div className="text-gray-400">Активных вылазок: <span className="text-white">{expeditions.filter(e => e.status === 'active').length}</span></div>
+          </div>
+        </div>
+
+        {/* Сброс игры */}
+        <button onClick={() => {
+          if (confirm('Начать заново? Всё будет потеряно. Как всегда.')) {
+            localStorage.removeItem('shelter_save');
+            window.location.reload();
+          }
+        }} className="w-full mt-4 py-2 rounded-lg bg-red-900/50 border border-red-500/50 text-red-400 text-xs hover:bg-red-900/70">
+          ⚠️ НАЧАТЬ ЗАНОВО
+        </button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<Shelter />, document.getElementById('root'));
+  </script>
+</body>
+</html>
